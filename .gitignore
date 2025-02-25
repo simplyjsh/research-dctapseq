@@ -172,3 +172,4 @@ cython_debug/
 
 # dctap
 **/data/
+dctap/qpcr/analysis/*.md
