@@ -1,0 +1,29 @@
+[project]
+authors = [{ name = "Jacob Huang", email = "huangjac@broadinstitute.org" }]
+name = "dctapseq-analysis"
+version = "0.0.1.dev"
+dependencies = []
+description = "A github repo to store analysis related to Engreitz's Lab DC-TAPseq paper."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.13"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/Jachuang321/research-dctapseq"
+Documentation = "https://github.com/Jachuang321/research-dctapseq"
+Issues = "https://github.com/Jachuang321/research-dctapseq/issues"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["dctap"]
+exclude = [""]
