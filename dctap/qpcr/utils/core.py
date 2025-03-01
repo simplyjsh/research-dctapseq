@@ -180,8 +180,10 @@ def get_plate_data(
 
     df = df_annotations.merge(df_data, on="Well")
     df.dropna(inplace=True)
+
+    first_col_index = 0
+    df.insert(first_col_index, "experiment_id", ([experiment_id] * len(df)))  # type: ignore
     df["plate_id"] = [plate_id] * len(df)
-    df["experiment_id"] = [experiment_id] * len(df)
 
     return df
 
