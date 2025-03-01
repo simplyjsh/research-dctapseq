@@ -3,9 +3,12 @@ import glob
 import numpy as np
 import pandas as pd
 from pathlib import Path
+from typing import cast
 
 from dctap.qpcr.constants import QPCRPATHS
 from dctap.qpcr.constants import PLATES
+from dctap.qpcr.constants.plates import Plate96
+from dctap.qpcr.libs import Incrementor
 
 
 # -----------------------------------------------------------------------
@@ -14,13 +17,23 @@ def _layout_to_annotation(
     experiment_id: str,
     plate_id: str,
     data_dir: Path = QPCRPATHS.DATADIR,
+    code_offset: int = 1,
+    code_file: Path | str | None = None,
     template_layout_file: Path | str | None = None,
     primer_layout_file: Path | str | None = None,
 ):
     """
-    Given a plate id, template layouts, and primer layouts,
+    Given a plate id, code, template layouts, and primer layouts,
     create an annotation csv file.
     """
+
+    if code_file is None:
+        code_pattern: str = str(
+            data_dir / experiment_id / (experiment_id + "*code.csv")
+        )
+        code_files = glob.glob(code_pattern)
+        assert len(code_files) == 1
+        code_file = code_files[0]
 
     if template_layout_file is None:
         template_pattern: str = str(
@@ -38,40 +51,90 @@ def _layout_to_annotation(
         assert len(primer_layout_files) == 1
         primer_layout_file = primer_layout_files[0]
 
-    # Handles Template Layout
+    # Handles reading Code Layout
+    with open(code_file, "r") as f:
+        lines = f.readlines()
+    assert lines[0].startswith("code")
+
+    code_map = []
+    for line in lines[1:]:
+        temp = line.strip().split(",")
+        assert len(temp) == 2
+        code_map = code_map + temp[1:]
+
+    # Handles reading Template Layout
     with open(template_layout_file, "r") as f:
         lines = f.readlines()
-    assert lines[0].startswith("Well")
+    assert lines[0].startswith("template")
 
-    wells = []
-    template_list = []
+    template_map = []
     for line in lines[1:]:
         temp = line.strip().split(",")
-        assert len(temp) == 2
-        wells = wells + temp[:1]
-        template_list = template_list + temp[1:]
+        assert len(temp) == 13
+        template_map = template_map + temp[1:]
 
-    assert len(wells) == PLATES.P384.TOTALWELLS
-    assert len(template_list) == PLATES.P384.TOTALWELLS
+    assert len(template_map) == PLATES.P96.TOTALWELLS
 
-    # Handles Primer Layout
+    # Handles reading Primer Layout
     with open(primer_layout_file, "r") as f:
         lines = f.readlines()
-    assert lines[0].startswith("Well")
+    assert lines[0].startswith("primer")
 
-    primer_list = []
+    primer_map = []
     for line in lines[1:]:
         temp = line.strip().split(",")
-        assert len(temp) == 2
-        primer_list = primer_list + temp[1:]
+        assert len(temp) == 13
+        primer_map = primer_map + temp[1:]
 
-    assert len(primer_list) == PLATES.P384.TOTALWELLS
+    assert len(primer_map) == PLATES.P96.TOTALWELLS
+
+    # Converts to 384-well plate layouts
+    template_list = [None] * PLATES.P384.TOTALWELLS
+    primer_list = [None] * PLATES.P384.TOTALWELLS
+    increment = Incrementor()
+    increment_primer = Incrementor()
+
+    for dozen in range(0, len(template_map), PLATES.P96.COL):
+        row = template_map[dozen : dozen + PLATES.P96.COL]
+        for well in row:
+            sample = ""
+            primer = ""
+
+            try:
+                sample_id: int = int(well) - code_offset
+                sample = code_map[sample_id]
+                primer = primer_map[increment_primer]
+            except ValueError:
+                sample = ""
+                primer = ""
+
+            template_list[increment] = sample  # type: ignore
+            template_list[increment + PLATES.P384.COL] = sample  # type: ignore
+
+            primer_list[increment] = primer  # type: ignore
+            primer_list[increment + PLATES.P384.COL] = primer  # type: ignore
+
+            increment.step()
+
+            template_list[increment] = sample  # type: ignore
+            template_list[increment + PLATES.P384.COL] = sample  # type: ignore
+
+            primer_list[increment] = primer  # type: ignore
+            primer_list[increment + PLATES.P384.COL] = primer  # type: ignore
+
+            increment.step()
+            increment_primer.step()
+
+        increment.skip(PLATES.P384.COL)
 
     annotation_file = data_dir / experiment_id / (plate_id + "-annotation.csv")
     with open(annotation_file, "w") as f:
         f.write(",".join(["Well", "Sample", "Primer"]) + "\n")
         for i in range(PLATES.P384.TOTALWELLS):
-            f.write(",".join([wells[i], template_list[i], primer_list[i]]) + "\n")
+            f.write(
+                ",".join([PLATES.P384.WELLS[i], template_list[i], primer_list[i]])  # type: ignore
+                + "\n"
+            )
 
     return [str(annotation_file)]
 
@@ -102,18 +165,18 @@ def get_plate_data(
     if len(annotation_files) == 0:
         annotation_files = _layout_to_annotation(experiment_id, plate_id)
     assert len(annotation_files) == 1
-    annotation_file = annotation_files[0]
+    annotation_file = str(annotation_files[0])
 
     data_pattern = str(data_dir / experiment_id / ("*" + plate_id + ".csv"))
     data_files = glob.glob(data_pattern)
     assert len(data_files) == 1
     data_file = data_files[0]
 
-    df = pd.read_csv(annotation_file)
-    df_annotations = df[["Well", "Sample", "Primer"]]
+    df = cast(pd.DataFrame, pd.read_csv(annotation_file))
+    df_annotations = cast(pd.DataFrame, df[["Well", "Sample", "Primer"]])
 
-    df = pd.read_csv(data_file)
-    df_data = df[["Well", "Cq"]]
+    df = cast(pd.DataFrame, pd.read_csv(data_file))
+    df_data = cast(pd.DataFrame, df[["Well", "Cq"]])
 
     df = df_annotations.merge(df_data, on="Well")
     df.dropna(inplace=True)
@@ -170,7 +233,4 @@ if __name__ == "__main__":
     df["well_id"] = [df.plate_id[i] + "_" + df.Well[i] for i in range(len(df))]
     df["relExp_25"] = [2 ** (25 - df.Cq[i]) for i in range(len(df))]
 
-    df1 = get_deltaCq_expression_data(df, test_primer="OCT4", ref_primer="GAPDH")
-    df2 = get_deltaCq_expression_data(df, test_primer="CER1", ref_primer="GAPDH")
-
-    print(df1)
+    df1 = get_deltaCq_expression_data(df, test_primer="CER1", ref_primer="GAPDH")
