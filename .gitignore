@@ -173,3 +173,6 @@ cython_debug/
 # dctap
 **/data/
 dctap/qpcr/analysis/*.md
+
+# dctap quarto local files
+dctap/qpcr/analysis/*_files/
