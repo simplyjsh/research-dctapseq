@@ -233,6 +233,8 @@ def set_conditions(
     sample_metadata: pd.DataFrame,
     conditions: list[str],
     merge_cols: list[str],
+    additions: list[str] = [],
+    append: list[str] = [],
 ) -> pd.DataFrame:
     """
     Creates condition columns for the df DataFrame based on the given conditions
@@ -247,7 +249,15 @@ def set_conditions(
         sample_metadata[condition] = sample_metadata[int(cols[0])].str.cat(
             [sample_metadata[int(col)] for col in cols[1:]], sep="_"
         )
-    #
+
+    # Ensure the addition columns exists
+    for addition in additions:
+        assert addition in sample_metadata.columns
+
+    # Append additional comments to defined condition columns
+    for i, addition in enumerate(additions):
+        sample_metadata[addition] = sample_metadata[addition] + "_" + append[i]
+
     # Drop sample_metadata columns
     sample_metadata = sample_metadata.drop(metadata_colnames, axis="columns")
 
@@ -258,8 +268,6 @@ def set_conditions(
     return df
 
 
-# TODO:
-# This method is still in developement
 def get_deltaCq_expression_data(
     df,
     test_primer,
@@ -270,7 +278,7 @@ def get_deltaCq_expression_data(
     calculate average Cq values of replicates and deltaCq values
     of each sample against the reference primer.
     """
-    for i in ["Well", "Sample", "Primer", "Cq", "experiment_id"]:
+    for i in ["Well", "Sample", "Primer", "Cq"]:
         assert i in df.columns
     df = df.copy()
 
@@ -288,9 +296,18 @@ def get_deltaCq_expression_data(
     # Merge results
     df_results = df_ref_mean.merge(df_test_mean, on="Sample")
     df_results["deltaCq"] = df_results.Cq_test - df_results.Cq_ref
+    df_results.rename(columns={"Cq_ref": f"Cq_ref_{ref_primer}"}, inplace=True)
+    df_results.rename(columns={"Cq_test": f"Cq_test_{test_primer}"}, inplace=True)
+    df_results.rename(
+        columns={"deltaCq": f"deltaCq_{test_primer}v{ref_primer}"}, inplace=True
+    )
 
-    print(df_results)
+    # Drop rows for primers that are not test primer
+    df = df[df.apply(lambda row: row["Primer"] == test_primer, axis="columns")]
+    df = df.drop(["Well", "Cq", "well_id"], axis="columns")
 
+    # Collapse df
+    df = df.drop_duplicates(subset="Sample")
     df = df.merge(df_results, on="Sample", how="right")
 
     return df
@@ -312,12 +329,19 @@ if __name__ == "__main__":
     #     display(df_sample)
 
     # Adding a few helpful columns
-    df = set_conditions(df, df_samples, ["bio_reps", "cond_sd"], ["012", "02"])
+    df = set_conditions(
+        df,
+        df_samples,
+        conditions=["ctrl", "bio_reps", "cond_sd", "cond_chirtime"],
+        merge_cols=["02", "012", "02", "4"],
+        additions=["ctrl"],
+        append=["0hr"],
+    )
     df["group"] = [df.Sample[i] + "___" + df.Primer[i] for i in range(len(df))]
     df["well_id"] = [df.plate_id[i] + "_" + df.Well[i] for i in range(len(df))]
-    df["relExp_25"] = [2 ** (25 - df.Cq[i]) for i in range(len(df))]
+    # df["relExp_25"] = [2 ** (25 - df.Cq[i]) for i in range(len(df))]
 
     df.to_csv("~/Downloads/20250302-dftesting.csv")
 
-    # df1 = get_deltaCq_expression_data(df, test_primer="CER1", ref_primer="GAPDH")
-    # df1.to_csv("~/Downloads/20250302-df1testing.csv")
+    df1 = get_deltaCq_expression_data(df, test_primer="CER1", ref_primer="GAPDH")
+    df1.to_csv("~/Downloads/20250302-df1testing.csv")
