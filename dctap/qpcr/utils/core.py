@@ -5,6 +5,8 @@ import pandas as pd
 from pathlib import Path
 from typing import cast
 
+import json
+
 from dctap.libs.pandas import set_defaultoptions, display, displaydf_full
 
 from dctap.qpcr.constants import QPCRPATHS
@@ -404,7 +406,7 @@ def get_deltaCq_stats(df, biorep_col: str):
 
     deltacq_pattern = r"deltaCq_"
     assert any(re.match(deltacq_pattern, col) for col in df.columns), (
-        "At least one column starting with 'mean_' must exist"
+        "At least one column starting with 'deltaCq_' must exist"
     )
 
     # Drop all uncessary rows
@@ -441,28 +443,50 @@ def get_deltaCq_stats(df, biorep_col: str):
     return df_results
 
 
-def get_calibrator(df, ctrl_col: str, condition_col: str):
+def get_calibrators(
+    df,
+    ctrl_col: str,
+    condition_col: str,
+    assign_ctrl_samples: list[str],
+    assign_cond_group: list[str],
+):
     """
     Get calibrator based on the user assigned ctrl and condition columns
     for deltadeltaCq calculations.
     """
     # Ensure deltaCq and user defined ctrl columns exist
-    for i in ["Sample", ctrl_col, condition_col]:
+    for i in [ctrl_col, condition_col]:
         assert i in df.columns, (
             f"The assigned control ({ctrl_col}) or condition ({condition_col})",
             "column does not exist in the DataFrame",
         )
 
-    deltacq_pattern = r"deltaCq_"
+    deltacq_pattern = r"deltaCq_.*_mean"
     assert any(re.match(deltacq_pattern, col) for col in df.columns), (
-        "At least one column starting with 'mean_' must exist"
+        "At least one column starting with 'deltaCq_*_mean' must exist"
+    )
+
+    # Ensure the assigned ctrl sames and condition groups exists
+    assert set((assign_ctrl_samples)).issubset(set(df[ctrl_col].unique())), (
+        f"Missing expected items: {set(assign_ctrl_samples) - set(df[ctrl_col].unique())}"
+    )
+    assert set((assign_cond_group)).issubset(set(df[condition_col].unique())), (
+        f"Missing expected items: {set(assign_cond_group) - set(df[condition_col].unique())}"
     )
 
     df = df.copy()
+    # Get calibrators based on assigned ctrls
+    df_rows = df[df[ctrl_col].isin(assign_ctrl_samples)]
+    deltacq_cols = [col for col in df.columns if re.match(deltacq_pattern, col)]
 
-    # Assign Calibrator column
+    calibrators = {}
+    for _, row in df_rows.iterrows():
+        ctrl_sample = row[ctrl_col]
+        calibrators[ctrl_sample] = {
+            calibrator: row[calibrator] for calibrator in deltacq_cols
+        }
 
-    return pd.DataFrame()
+    return pd.DataFrame.from_dict(calibrators, orient="index")
 
 
 if __name__ == "__main__":
@@ -503,9 +527,26 @@ if __name__ == "__main__":
         test_primers=get_primers(df),
         drop_customcols=conditions,
     )
-
     df1.to_csv("~/Downloads/20250302-df1testing.csv")
 
     df2 = get_deltaCq_stats(df1, biorep_col="bio_reps")
-
     df2.to_csv("~/Downloads/20250302-df2testing.csv")
+
+    calibrators = get_calibrators(
+        df2,
+        ctrl_col="ctrl_calibrator",
+        condition_col="cond_sd",
+        assign_ctrl_samples=[
+            "P6_D0-2DD_SD0.4",
+            "P6_D0-2DD_SD0.46",
+            "P12_D0-2DD_SD0.4",
+            "P12_D0-2DD_SD0.5",
+        ],
+        assign_cond_group=[
+            "P6_SD0.4",
+            "P6_SD0.46",
+            "P12_SD0.4",
+            "P12_SD0.5",
+        ],
+    )
+    calibrators.to_csv("~/Downloads/20250302-calibratorstesting.csv")
