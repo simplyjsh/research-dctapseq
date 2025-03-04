@@ -1,14 +1,17 @@
 import re
 import glob
+import numpy as np
 import pandas as pd
 from pathlib import Path
 from typing import cast
 
-from dctap.libs.pandas import display, displaydf_full
+from dctap.libs.pandas import set_defaultoptions, display, displaydf_full
 
 from dctap.qpcr.constants import QPCRPATHS
 from dctap.qpcr.constants import PLATES
 from dctap.qpcr.libs import Incrementor
+
+set_defaultoptions(pd, supresscopywarning=None)
 
 
 # -----------------------------------------------------------------------
@@ -149,6 +152,13 @@ def _layout_to_annotation(
     return [str(annotation_file)]
 
 
+def get_primers(df):
+    primers = []
+    if "Primer" in df.columns:
+        primers = df.Primer.unique().tolist()
+    return primers
+
+
 # WARNING:
 # Depreciating soon: no longer setting conditions after getting relative Cq values
 def extract_key(s):
@@ -233,8 +243,8 @@ def set_conditions(
     sample_metadata: pd.DataFrame,
     conditions: list[str],
     merge_cols: list[str],
-    additions: list[str] = [],
-    append: list[str] = [],
+    additions: list[str] | None = None,
+    append: list[str] | None = None,
 ) -> pd.DataFrame:
     """
     Creates condition columns for the df DataFrame based on the given conditions
@@ -250,13 +260,14 @@ def set_conditions(
             [sample_metadata[int(col)] for col in cols[1:]], sep="_"
         )
 
-    # Ensure the addition columns exists
-    for addition in additions:
-        assert addition in sample_metadata.columns
+    if additions is not None and append is not None:
+        # Ensure the addition columns exists
+        for addition in additions:
+            assert addition in sample_metadata.columns
 
-    # Append additional comments to defined condition columns
-    for i, addition in enumerate(additions):
-        sample_metadata[addition] = sample_metadata[addition] + "_" + append[i]
+        # Append additional comments to defined condition columns
+        for i, addition in enumerate(additions):
+            sample_metadata[addition] = sample_metadata[addition] + "_" + append[i]
 
     # Drop sample_metadata columns
     sample_metadata = sample_metadata.drop(metadata_colnames, axis="columns")
@@ -270,8 +281,8 @@ def set_conditions(
 
 def get_deltaCq_expression_data(
     df,
-    test_primer,
-    ref_primer,
+    ref_primer: str,
+    test_primer: str,
 ):
     """
     From the annotated dataframe containing raw qPCR data,
@@ -282,35 +293,176 @@ def get_deltaCq_expression_data(
         assert i in df.columns
     df = df.copy()
 
+    ref_col = f"Cq_ref_{ref_primer}"
+    tes_col = f"Cq_test_{test_primer}"
+
     # Get test and reference primers
     df_ref = df[df.Primer == ref_primer]
-    df_ref.rename(columns={"Cq": "Cq_ref"}, inplace=True)
+    df_ref.rename(columns={"Cq": ref_col}, inplace=True)
 
     df_test = df[df.Primer == test_primer]
-    df_test.rename(columns={"Cq": "Cq_test"}, inplace=True)
+    df_test.rename(columns={"Cq": tes_col}, inplace=True)
 
     # Get average Cq values of technical replicates
-    df_ref_mean = df_ref.groupby("Sample", as_index=False)[["Cq_ref"]].mean()
-    df_test_mean = df_test.groupby("Sample", as_index=False)[["Cq_test"]].mean()
+    ref_dict = {
+        ref_col + "_mean": (ref_col, "mean"),
+        ref_col + "_std": (ref_col, "std"),
+        ref_col + "_count": (ref_col, "count"),
+    }
+    tes_dict = {
+        tes_col + "_mean": (tes_col, "mean"),
+        tes_col + "_std": (tes_col, "std"),
+        tes_col + "_count": (tes_col, "count"),
+    }
 
-    # Merge results
-    df_results = df_ref_mean.merge(df_test_mean, on="Sample")
-    df_results["deltaCq"] = df_results.Cq_test - df_results.Cq_ref
-    df_results.rename(columns={"Cq_ref": f"Cq_ref_{ref_primer}"}, inplace=True)
-    df_results.rename(columns={"Cq_test": f"Cq_test_{test_primer}"}, inplace=True)
+    df_ref_stats = df_ref.groupby("Sample", as_index=False).agg(**ref_dict)
+    df_test_stats = df_test.groupby("Sample", as_index=False).agg(**tes_dict)
+
+    df_ref_stats[ref_col + "_ste"] = df_ref_stats[ref_col + "_std"] / np.sqrt(
+        df_ref_stats[ref_col + "_count"]
+    )
+    df_test_stats[tes_col + "_ste"] = df_test_stats[tes_col + "_std"] / np.sqrt(
+        df_test_stats[tes_col + "_count"]
+    )
+
+    # Merge and drop metadata results
+    df_results = df_ref_stats.merge(df_test_stats, on="Sample")
+    df_results["deltaCq"] = (
+        df_results[tes_col + "_mean"] - df_results[ref_col + "_mean"]
+    )
     df_results.rename(
         columns={"deltaCq": f"deltaCq_{test_primer}v{ref_primer}"}, inplace=True
+    )
+    df_results = df_results.drop(
+        [ref_col + "_count", tes_col + "_count"], axis="columns"
     )
 
     # Drop rows for primers that are not test primer
     df = df[df.apply(lambda row: row["Primer"] == test_primer, axis="columns")]
-    df = df.drop(["Well", "Cq", "well_id"], axis="columns")
+    df = df.drop(
+        ["experiment_id", "Well", "Primer", "Cq", "plate_id"],
+        axis="columns",
+    )
 
     # Collapse df
     df = df.drop_duplicates(subset="Sample")
     df = df.merge(df_results, on="Sample", how="right")
 
     return df
+
+
+# NOTE:
+# This method probably needs to be refactored as there are many
+# unnecessary computations occuring with running it through
+# the get_deltaCq_expression_data() method
+def get_deltaCq_expression_bulkdata(
+    df, ref_primer: str, test_primers: list[str], drop_customcols: list[str] = []
+):
+    """
+    From the annotated dataframe containing raw qPCR data,
+    calculate average Cq values of replicates and deltaCq values
+    of each sample against the reference primer.
+    """
+    # Remove ref_primer if include in test_primer list
+    if ref_primer in test_primers:
+        test_primers.remove(ref_primer)
+
+    df = df.copy()
+    df_results = pd.DataFrame(df["Sample"].drop_duplicates().reset_index(drop=True))
+    for i, test_primer in enumerate(test_primers):
+        df1 = get_deltaCq_expression_data(df, ref_primer, test_primer)
+
+        # Drop unnecessary duplicate metadata columns generated from
+        # get_deltaCq_expression_data()
+        if i > 0:
+            df1 = df1.drop(
+                (
+                    [
+                        f"Cq_ref_{ref_primer}_mean",
+                        f"Cq_ref_{ref_primer}_std",
+                        f"Cq_ref_{ref_primer}_ste",
+                    ]
+                    + drop_customcols
+                ),
+                axis="columns",
+            )
+        df_results = df_results.merge(df1, on="Sample", how="left")
+
+    return df_results
+
+
+def get_deltaCq_stats(df, biorep_col: str):
+    """
+    Calculate average deltaCq values based on user provided biorep assignment
+    """
+    # Ensure deltaCq and user defined ctrl columns exist
+    for i in ["Sample", biorep_col]:
+        assert i in df.columns, (
+            f"The assigned biological replicate column ({biorep_col})",
+            "does not exist in the DataFrame",
+        )
+
+    deltacq_pattern = r"deltaCq_"
+    assert any(re.match(deltacq_pattern, col) for col in df.columns), (
+        "At least one column starting with 'mean_' must exist"
+    )
+
+    # Drop all uncessary rows
+    df1 = df.copy()
+    cq_pattern = r"Cq_"
+    cq_cols = (df1.filter(regex=cq_pattern).columns).append(pd.Index(["Sample"]))
+    df1 = (
+        df1.drop(cq_cols, axis="columns")
+        .drop_duplicates(subset=biorep_col, keep="first")
+        .reset_index(drop=True)
+    )
+    df_results = pd.DataFrame(df1)
+
+    # get all deltaCq columns
+    deltacq_pattern = r"deltaCq_"
+    deltacq_cols = df.filter(regex=deltacq_pattern).columns
+
+    # Caclulate deltaCq stats
+    for col in deltacq_cols:
+        stats_dict = {
+            col + "_mean": (col, "mean"),
+            col + "_std": (col, "std"),
+            col + "_count": (col, "count"),
+        }
+        df_stats = df.groupby(biorep_col, as_index=False).agg(**stats_dict)
+        df_stats[col + "_ste"] = df_stats[col + "_std"] / np.sqrt(
+            df_stats[col + "_count"]
+        )
+
+        # Drop metadata cols and merge to results
+        df_stats = df_stats.drop([col + "_count"], axis="columns")
+        df_results = df_results.merge(df_stats, on=biorep_col, how="left")
+
+    return df_results
+
+
+def get_calibrator(df, ctrl_col: str, condition_col: str):
+    """
+    Get calibrator based on the user assigned ctrl and condition columns
+    for deltadeltaCq calculations.
+    """
+    # Ensure deltaCq and user defined ctrl columns exist
+    for i in ["Sample", ctrl_col, condition_col]:
+        assert i in df.columns, (
+            f"The assigned control ({ctrl_col}) or condition ({condition_col})",
+            "column does not exist in the DataFrame",
+        )
+
+    deltacq_pattern = r"deltaCq_"
+    assert any(re.match(deltacq_pattern, col) for col in df.columns), (
+        "At least one column starting with 'mean_' must exist"
+    )
+
+    df = df.copy()
+
+    # Assign Calibrator column
+
+    return pd.DataFrame()
 
 
 if __name__ == "__main__":
@@ -324,24 +476,36 @@ if __name__ == "__main__":
     df = pd.concat(dfs)
     df.reset_index(inplace=True, drop=True)
 
-    df_samples = get_sample_metadata(cast(pd.Series, df["Sample"]))
+    df_samples = get_sample_metadata(cast(pd.Series, df.Sample))
     # with displaydf_full():
     #     display(df_sample)
 
     # Adding a few helpful columns
+    conditions = ["bio_reps", "ctrl_calibrator", "cond_sd", "cond_chirtime"]
     df = set_conditions(
         df,
         df_samples,
-        conditions=["ctrl", "bio_reps", "cond_sd", "cond_chirtime"],
-        merge_cols=["02", "012", "02", "4"],
-        additions=["ctrl"],
-        append=["0hr"],
+        conditions=conditions,
+        merge_cols=["0124", "012", "02", "4"],
+        # additions=["ctrl_calibrator"],
+        # append=["0hr"],
     )
-    df["group"] = [df.Sample[i] + "___" + df.Primer[i] for i in range(len(df))]
-    df["well_id"] = [df.plate_id[i] + "_" + df.Well[i] for i in range(len(df))]
+    # df["group"] = [df.Sample[i] + "___" + df.Primer[i] for i in range(len(df))]
+    # df["well_id"] = [df.plate_id[i] + "_" + df.Well[i] for i in range(len(df))]
     # df["relExp_25"] = [2 ** (25 - df.Cq[i]) for i in range(len(df))]
 
     df.to_csv("~/Downloads/20250302-dftesting.csv")
 
-    df1 = get_deltaCq_expression_data(df, test_primer="CER1", ref_primer="GAPDH")
+    # df1 = get_deltaCq_expression_data(df, ref_primer="GAPDH", test_primer="CER1")
+    df1 = get_deltaCq_expression_bulkdata(
+        df,
+        ref_primer="GAPDH",
+        test_primers=get_primers(df),
+        drop_customcols=conditions,
+    )
+
     df1.to_csv("~/Downloads/20250302-df1testing.csv")
+
+    df2 = get_deltaCq_stats(df1, biorep_col="bio_reps")
+
+    df2.to_csv("~/Downloads/20250302-df2testing.csv")
