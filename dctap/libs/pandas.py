@@ -10,6 +10,7 @@ def set_defaultoptions(
     max_rows: int | None = 10,
     expand_frame_repr: bool = False,
     large_repr: Literal["truncate", "info"] = "truncate",
+    supresscopywarning: Literal["warn"] | None = "warn",
 ):
     """
     Set default options for panda DataFrames.
@@ -37,8 +38,11 @@ def set_defaultoptions(
     pandas.set_option("display.max_rows", max_rows)
     pandas.set_option("display.min_rows", max_rows)
 
-    pd.set_option("display.expand_frame_repr", expand_frame_repr)
-    pd.set_option("display.large_repr", large_repr)
+    pandas.set_option("display.expand_frame_repr", expand_frame_repr)
+    pandas.set_option("display.large_repr", large_repr)
+
+    # Supress warnings
+    pandas.options.mode.chained_assignment = supresscopywarning
 
 
 def displaydf_full():
