@@ -7,6 +7,8 @@ from typing import cast
 
 import json
 
+from pandas.core import methods
+
 from dctap.libs.pandas import set_defaultoptions, display, displaydf_full
 
 from dctap.qpcr.constants import QPCRPATHS
@@ -409,7 +411,7 @@ def get_deltaCq_stats(df, biorep_col: str):
         "At least one column starting with 'deltaCq_' must exist"
     )
 
-    # Drop all uncessary rows
+    # Drop all uncessary rows for results df
     df1 = df.copy()
     cq_pattern = r"Cq_"
     cq_cols = (df1.filter(regex=cq_pattern).columns).append(pd.Index(["Sample"]))
@@ -481,12 +483,73 @@ def get_calibrators(
 
     calibrators = {}
     for _, row in df_rows.iterrows():
-        ctrl_sample = row[ctrl_col]
+        ctrl_sample = row[condition_col]
         calibrators[ctrl_sample] = {
-            calibrator: row[calibrator] for calibrator in deltacq_cols
+            re.sub(r"_mean$", "", calibrator): row[calibrator]
+            for calibrator in deltacq_cols
         }
 
     return pd.DataFrame.from_dict(calibrators, orient="index")
+
+
+def get_deltadeltaCqMethod_foldchange(
+    df, df_calibrators, biorep_col: str, condition_col: str, keep_metadata: bool = False
+):
+    # TODO:
+    # Ensure that required cols and rows exists
+
+    df = df.copy()
+    # drop unnecessary Cq metadata/stats
+    cq_pattern = r"^Cq_"
+    cq_cols = df.filter(regex=cq_pattern).columns
+    df = df.drop(cq_cols, axis="columns").reset_index(drop=True)
+
+    # Assign calibrators to the proper samples
+    deltacq_pattern = r"deltaCq_.*"
+    deltacq_cols = [col for col in df.columns if re.match(deltacq_pattern, col)]
+
+    for col in deltacq_cols:
+        calibrator_col = f"{col}_calibrator"
+        deltadeltacq_col = f"delta{col}"
+        foldchange = f"2^({deltadeltacq_col})"
+
+        # Assignment
+        df[calibrator_col] = df[condition_col].apply(
+            lambda row: df_calibrators.loc[row, col]
+        )
+
+        # Calculations
+        df[deltadeltacq_col] = df[col] - df[calibrator_col]
+        df[foldchange] = np.power(2, -df[deltadeltacq_col])
+
+        # Stats
+        stats_dict = {
+            foldchange + "_mean": (foldchange, "mean"),
+            foldchange + "_std": (foldchange, "std"),
+            foldchange + "_count": (foldchange, "count"),
+        }
+        df_stats = df.groupby(biorep_col, as_index=False).agg(**stats_dict)
+        df_stats[foldchange + "_ste"] = df_stats[foldchange + "_std"] / np.sqrt(
+            df_stats[foldchange + "_count"]
+        )
+
+        # Drop metadata
+        if not keep_metadata:
+            df_stats = df_stats.drop([foldchange + "_count"], axis="columns")
+
+        df = df.merge(df_stats, on=biorep_col)
+
+    # Drop metadata after calculation
+    if not keep_metadata:
+        pattern = r"^(delta|2\^\([^)]*\)$)"
+        metadata_cols = df.filter(regex=pattern).columns
+        df = (
+            df.drop(metadata_cols, axis="columns")
+            .drop_duplicates(subset=biorep_col, keep="first")
+            .reset_index(drop=True)
+        )
+
+    return df
 
 
 if __name__ == "__main__":
@@ -532,7 +595,7 @@ if __name__ == "__main__":
     df2 = get_deltaCq_stats(df1, biorep_col="bio_reps")
     df2.to_csv("~/Downloads/20250302-df2testing.csv")
 
-    calibrators = get_calibrators(
+    df_calibrators = get_calibrators(
         df2,
         ctrl_col="ctrl_calibrator",
         condition_col="cond_sd",
@@ -549,4 +612,18 @@ if __name__ == "__main__":
             "P12_SD0.5",
         ],
     )
-    calibrators.to_csv("~/Downloads/20250302-calibratorstesting.csv")
+    df_calibrators.to_csv("~/Downloads/20250302-calibratorstesting.csv")
+
+    df3 = get_deltadeltaCqMethod_foldchange(
+        df1, df_calibrators, biorep_col="bio_reps", condition_col="cond_sd"
+    )
+    df3.to_csv("~/Downloads/20250302-df3testing.csv")
+
+    df3_meta = get_deltadeltaCqMethod_foldchange(
+        df1,
+        df_calibrators,
+        biorep_col="bio_reps",
+        condition_col="cond_sd",
+        keep_metadata=True,
+    )
+    df3_meta.to_csv("~/Downloads/20250302-df3testing-metadata.csv")
