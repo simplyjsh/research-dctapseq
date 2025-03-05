@@ -5,17 +5,9 @@ import pandas as pd
 from pathlib import Path
 from typing import cast
 
-import json
-
-from pandas.core import methods
-
-from dctap.libs.pandas import set_defaultoptions, display, displaydf_full
-
 from dctap.qpcr.constants import QPCRPATHS
 from dctap.qpcr.constants import PLATES
 from dctap.qpcr.libs import Incrementor
-
-set_defaultoptions(pd, supresscopywarning=None)
 
 
 # -----------------------------------------------------------------------
@@ -496,12 +488,13 @@ def get_deltadeltaCqMethod_foldchange(
     df, df_calibrators, biorep_col: str, condition_col: str, keep_metadata: bool = False
 ):
     # TODO:
+    # Notes about this method
     # Ensure that required cols and rows exists
 
     df = df.copy()
     # drop unnecessary Cq metadata/stats
     cq_pattern = r"^Cq_"
-    cq_cols = df.filter(regex=cq_pattern).columns
+    cq_cols = (df.filter(regex=cq_pattern).columns).append(pd.Index(["Sample"]))
     df = df.drop(cq_cols, axis="columns").reset_index(drop=True)
 
     # Assign calibrators to the proper samples
@@ -553,77 +546,5 @@ def get_deltadeltaCqMethod_foldchange(
 
 
 if __name__ == "__main__":
-    experiment_id = "JR95-250129"
-    plate_ids = ["JR95-250129-plate1", "JR95-250129-plate2", "JR95-250129-plate3"]
-
-    dfs = []
-    for plate_id in plate_ids:
-        dfs.append(get_plate_data(experiment_id, plate_id))
-
-    df = pd.concat(dfs)
-    df.reset_index(inplace=True, drop=True)
-
-    df_samples = get_sample_metadata(cast(pd.Series, df.Sample))
-    # with displaydf_full():
-    #     display(df_sample)
-
-    # Adding a few helpful columns
-    conditions = ["bio_reps", "ctrl_calibrator", "cond_sd", "cond_chirtime"]
-    df = set_conditions(
-        df,
-        df_samples,
-        conditions=conditions,
-        merge_cols=["0124", "012", "02", "4"],
-        # additions=["ctrl_calibrator"],
-        # append=["0hr"],
-    )
-    # df["group"] = [df.Sample[i] + "___" + df.Primer[i] for i in range(len(df))]
-    # df["well_id"] = [df.plate_id[i] + "_" + df.Well[i] for i in range(len(df))]
-    # df["relExp_25"] = [2 ** (25 - df.Cq[i]) for i in range(len(df))]
-
-    df.to_csv("~/Downloads/20250302-dftesting.csv")
-
-    # df1 = get_deltaCq_expression_data(df, ref_primer="GAPDH", test_primer="CER1")
-    df1 = get_deltaCq_expression_bulkdata(
-        df,
-        ref_primer="GAPDH",
-        test_primers=get_primers(df),
-        drop_customcols=conditions,
-    )
-    df1.to_csv("~/Downloads/20250302-df1testing.csv")
-
-    df2 = get_deltaCq_stats(df1, biorep_col="bio_reps")
-    df2.to_csv("~/Downloads/20250302-df2testing.csv")
-
-    df_calibrators = get_calibrators(
-        df2,
-        ctrl_col="ctrl_calibrator",
-        condition_col="cond_sd",
-        assign_ctrl_samples=[
-            "P6_D0-2DD_SD0.4",
-            "P6_D0-2DD_SD0.46",
-            "P12_D0-2DD_SD0.4",
-            "P12_D0-2DD_SD0.5",
-        ],
-        assign_cond_group=[
-            "P6_SD0.4",
-            "P6_SD0.46",
-            "P12_SD0.4",
-            "P12_SD0.5",
-        ],
-    )
-    df_calibrators.to_csv("~/Downloads/20250302-calibratorstesting.csv")
-
-    df3 = get_deltadeltaCqMethod_foldchange(
-        df1, df_calibrators, biorep_col="bio_reps", condition_col="cond_sd"
-    )
-    df3.to_csv("~/Downloads/20250302-df3testing.csv")
-
-    df3_meta = get_deltadeltaCqMethod_foldchange(
-        df1,
-        df_calibrators,
-        biorep_col="bio_reps",
-        condition_col="cond_sd",
-        keep_metadata=True,
-    )
-    df3_meta.to_csv("~/Downloads/20250302-df3testing-metadata.csv")
+    # TODO: import testing methods instead of writing directly into this script
+    pass
