@@ -525,6 +525,12 @@ def get_deltadeltaCqMethod_foldchange(
         df_stats[foldchange + "_ste"] = df_stats[foldchange + "_std"] / np.sqrt(
             df_stats[foldchange + "_count"]
         )
+        df_stats[foldchange + "_ci95_upper"] = (
+            df_stats[foldchange + "_mean"] + df_stats[foldchange + "_ste"] * 1.96
+        )
+        df_stats[foldchange + "_ci95_lower"] = (
+            df_stats[foldchange + "_mean"] - df_stats[foldchange + "_ste"] * 1.96
+        )
 
         # Drop metadata
         if not keep_metadata:
