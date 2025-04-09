@@ -200,7 +200,7 @@ def get_plate_data(
     df = cast(pd.DataFrame, pd.read_csv(data_file))
     df_data = cast(pd.DataFrame, df[["Well", "Cq"]])
 
-    df = df_annotations.merge(df_data, on="Well")
+    df = df_annotations.merge(df_data, on="Well", how="left")
     df.dropna(inplace=True)
 
     first_col_index = 0

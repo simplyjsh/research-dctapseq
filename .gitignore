@@ -170,6 +170,9 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# MacOS Stuff
+.DS_Store
+
 # dctap
 **/data/
 dctap/qpcr/analysis/*.md
