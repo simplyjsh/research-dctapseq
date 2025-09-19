@@ -8,6 +8,8 @@ Entry point into command line interface.
 # INFO: Imports
 import click
 
+import logging
+
 from sceptretoolscli.core.formatters import fmt_inputs
 
 # -----------------------------------------------------------------------
@@ -22,6 +24,7 @@ def cli() -> None:
     This CLI tool runs helpful for formating sceptre inputs.
     Currently in developement and only supports formatting sceptre inputs.
     """
+    logging.getLogger().setLevel(logging.INFO)
     pass
 
 

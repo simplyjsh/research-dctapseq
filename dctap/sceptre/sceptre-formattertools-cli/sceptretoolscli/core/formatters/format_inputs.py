@@ -317,9 +317,13 @@ def standardize_to_gene_id(
 
 
 # TODO: Write Function Doc and methodology
-def calculate_relative_dist(
+def calculate_relative_dist_perguide(
     gtf_split: pd.DataFrame, guide: pd.Series, dist_cutoff: int
 ):
+    logging.info(f"Computing distance near {guide['name']}")
+    # Track guide_id by appending it to gtf_split
+    gtf_split.loc[:, "guide_id"] = guide["name"]
+
     # Cal relative coords, subtracting from the guide's coord start
     gtf_split.loc[:, ["rel_coord_start", "rel_coord_end"]] = (
         gtf_split.loc[:, "start":"end"]
@@ -328,15 +332,13 @@ def calculate_relative_dist(
     )
 
     # Classify relative position
-    cond_left = (gtf_split["rel_coord_start"] < 0) & (gtf_split["rel_coord_end"] < 0)
-    cond_right = (gtf_split["rel_coord_start"] > 0) & (gtf_split["rel_coord_end"] > 0)
-    cond_start = gtf_split["rel_coord_start"].eq(0)
-    cond_end = gtf_split["rel_coord_end"].eq(0)
+    cond_left = gtf_split["rel_coord_end"] <= 0
+    cond_right = gtf_split["rel_coord_start"] >= 0
 
     # Assign classification
     gtf_split["rel_pos"] = np.select(
-        [cond_left, cond_right, cond_start, cond_end],
-        ["abs_left", "abs_right", "abs_right", "abs_left"],
+        [cond_left, cond_right],
+        ["abs_left", "abs_right"],
         default="check_both",
     )
 
@@ -358,10 +360,25 @@ def calculate_relative_dist(
         default=False,
     )
 
-    filtered = gtf_split[gtf_split.loc[:, "nearby"]].copy()
-    all_results = gtf_split.copy()
+    filtered = gtf_split[gtf_split.loc[:, "nearby"]].copy().reset_index(drop=True)
+    all = gtf_split.copy().reset_index(drop=True)
 
-    return filtered, all_results
+    return filtered, all
+
+
+# TODO: Write Function Doc
+def calculate_relative_dist_perchr(
+    gtf_split: pd.DataFrame, guide_split: pd.DataFrame, dist_cutoff: int
+):
+    results_list = list()
+
+    # HACK: Potentially parallelize task in batches of 10 or 100?
+    for _, guide in guide_split.iterrows():
+        g_results, _ = calculate_relative_dist_perguide(gtf_split, guide, dist_cutoff)
+        results_list.append(g_results)
+
+    df_results = pd.concat(results_list, ignore_index=True)
+    return df_results
 
 
 # -----------------------------------------------------------------------
@@ -375,9 +392,8 @@ def get_guidegene_pairing_file(
     gtf,
     output_path=Path(__file__).resolve().parent.parent.parent / "results",
 ):
-    # Intialize results variables
+    # Intialize metadata variables
     leftouts = dict()  # TODO:
-    guide_gene_pairing = pd.DataFrame()
 
     # Read files & format files
     df_gtfgenes, df_ambigious_genes = get_gtfgenes(gtf)
@@ -405,7 +421,21 @@ def get_guidegene_pairing_file(
         for chr_splits, group in df_guides.groupby("chr")
     }
 
-    pass
+    logging.info("Finding nearby genes for each guide.")
+    results_list = list()
+    # HACK: Nice to have, parallelize task by chr splits
+    for chr in guide_splits.keys():
+        logging.info(f"Processing {chr}.")
+        r = calculate_relative_dist_perchr(
+            gtf_splits.get(chr),  # type: ignore
+            guide_splits.get(chr),  # type:ignore
+            dist_cutoff,
+        )
+        results_list.append(r)
+        logging.info(f"STEP COMPLETED for {chr}")
+    guide_gene_pairing = pd.concat(results_list, ignore_index=True)
+
+    return guide_gene_pairing
 
 
 # -----------------------------------------------------------------------
