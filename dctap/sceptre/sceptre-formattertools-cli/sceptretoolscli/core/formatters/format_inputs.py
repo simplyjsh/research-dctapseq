@@ -1,7 +1,7 @@
 """
 SceptreFormatterToolsCLI
 ------------------------
-Entry point into command line interface.
+Main script for Sceptre Input Formatting Tool.
 """
 
 # -----------------------------------------------------------------------
@@ -435,6 +435,8 @@ def get_guidegene_pairing_file(
         logging.info(f"STEP COMPLETED for {chr}")
     guide_gene_pairing = pd.concat(results_list, ignore_index=True)
 
+    # TODO: Option to write to a path
+
     return guide_gene_pairing
 
 
@@ -442,6 +444,7 @@ def get_guidegene_pairing_file(
 # INFO: CLI
 
 
+# TODO: Write Docs
 @click.group(name="fmt-inputs")
 def fmt_inputs() -> None:
     pass
