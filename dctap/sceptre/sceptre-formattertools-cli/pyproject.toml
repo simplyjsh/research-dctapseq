@@ -1,0 +1,32 @@
+[project]
+name = "sceptre-formattertools-cli"
+version = "0.0.1"
+dependencies = ["click==8.2.1", "pandas==2.3.2"]
+authors = [{ name = "Jacob Huang", email = "huangjac@broadinstitute.org" }]
+description = "CLI tool for formatting guides designs for sceptre inputs"
+readme = "README.md"
+requires-python = ">=3.13"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/simplyjsh/research-dctapseq/tree/main/dctap/sceptre/sceptre_formattertools"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["sceptretoolscli*"]
+exclude = ["data", "docs", "examples"]
+namespaces = true
+
+[tool.setuptools]
+include-package-data = false
+
+[project.scripts]
+run_sceptretools = "sceptretoolscli:cli"
