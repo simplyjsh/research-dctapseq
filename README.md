@@ -1,4 +1,4 @@
-# DC-TAP-seq Internal Toolsets
+# DC-TAP-seq Internal Toolkit
 
 > [!NOTE]
 > This repo is currently undergoing development.
@@ -20,8 +20,9 @@ analyses, and generate standard QC plots that enable quick, intuitive assessment
 of data quality for decision making. These plots maybe helpful in indicating
 whether generated datasets are strong enough for expert analysis,
 need further work (and possible rescue), or are too poor to continue.
-My hope for these tools is to get you at least 80% of the way toward designing,
-validating, and analyzing large-scale perturbation experimental datasets.
+My hope for these tools is to get any interested users at least 80% of the
+way towards designing, validating, and analyzing large-scale perturbation
+experimental datasets.
 
 ## Acknowledgements and Disclaimers
 
@@ -30,7 +31,7 @@ authors and their institutions. See the official
 [EngreitzLab/DC_TAP_Paper repo](https://github.com/EngreitzLab/DC_TAP_Paper),
 published papers, and
 [preprints](https://www.biorxiv.org/content/10.1101/2025.09.16.676677v1)
-for upstream work that has enabled the efforts here.
+for upstream work that has motivated the efforts here.
 
 **This work is largely a personal effort.** Most of the code and analyses have
 not been formally reviewed or validated by collaborators, organizations, or
@@ -50,7 +51,7 @@ under the Broad’s Epigenomics Program, and the Jones and Donnard groups at the
 [Lander Lab](https://www.broadinstitute.org/lander-lab/people).
 And last but definitely not least: a heartfelt thanks to
 [Judhajeet Ray](https://www.broadinstitute.org/bios/judhajeet-ray), whose
-guidance has pushed me to be the best scientist I can and should be.
+guidance has pushed me to always be the best scientist I can and should be.
 
 None of this work would have been possible without such generous mentorship
 and support.

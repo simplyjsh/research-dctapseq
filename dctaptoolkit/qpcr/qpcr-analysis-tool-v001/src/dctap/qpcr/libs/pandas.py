@@ -1,7 +1,6 @@
 from typing import Literal
 
 import pandas as pd
-from IPython.display import display
 
 
 def set_defaultoptions(

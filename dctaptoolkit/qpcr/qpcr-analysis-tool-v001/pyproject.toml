@@ -1,0 +1,32 @@
+[project]
+authors = [{ name = "Jacob Huang", email = "huangjac@broadinstitute.org" }]
+name = "dctapseq-qpcr-analysis-v001"
+version = "0.0.1"
+dependencies = ["numpy==2.2.3", "pandas==2.2.3"]
+description = "An initial set of scripts and function tailored for the qPCR validation analyses related to the DC-TAP-seq paper."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.13"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/simplyjsh/research-dctapseq"
+Documentation = "https://github.com/simplyjsh/research-dctapseq/tree/main/dctaptoolkit/qpcr/dctapseq-qpcr-analysis-v001"
+Issues = "https://github.com/Jachuang321/research-dctapseq/issues"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.package-dir]
+"" = "src"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["dctap*"]
+exclude = [""]
