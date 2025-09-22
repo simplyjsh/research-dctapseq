@@ -1,5 +1,8 @@
 # HPC Enhancer Screen via DC-TAP-seq
 
+> [!CAUTION]
+> This sub-module will soon be archived.
+
 We are applying DC-TAP-seq to test over 30,000 E-G pairs across 2 cell states
 within a differentiating iPSC to hepatocyte cell model. In particular,
 we designed guides against the iPSC and Definitive Endoderm (DE) state.
