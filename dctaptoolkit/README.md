@@ -24,7 +24,7 @@ Work-in-progress.
 - [sceptre-formattertools-cli](./sceptre/sceptre-formattertools-cli/):
   Work-in-progress.
 - [sceptre-input-datacleaning-oneoff](./sceptre/sceptre-input-datacleaning-oneoff/):
-  DEPRECATED: This tool is not a tool and will soon be archived.
+  DEPRECATED: This sub-module is not a tool and will soon be archived.
   ~~Preliminary one-off task to format guide-target design library to
   be usable as sceptre input for DC-TAP-seq Analysis Workflow.~~
 
