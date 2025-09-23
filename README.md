@@ -45,12 +45,14 @@ to the folks at the
 [Broad Institute of MIT and Harvard](https://www.broadinstitute.org/),
 the HGRM Enhancer Team at the
 [Novo Nordisk Foundation Center for Genomic Mechanisms of Disease](https://www.broadinstitute.org/nnfc),
-[Jesse Engreitz](https://med.stanford.edu/profiles/jesse-engreitz) and his
-[lab at Stanford](https://www.engreitzlab.org/), the Shoresh computational group
+[Engreitz Lab at Stanford](https://www.engreitzlab.org/) 
+, the Shoresh computational group
 under the Broad’s Epigenomics Program, and the Jones and Donnard groups at the
 [Lander Lab](https://www.broadinstitute.org/lander-lab/people).
-And last but definitely not least: a heartfelt thanks to
-[Judhajeet Ray](https://www.broadinstitute.org/bios/judhajeet-ray), whose
+
+And finally, many many many heartfelt thanks to 
+[Jesse Engreitz](https://med.stanford.edu/profiles/jesse-engreitz) and 
+[Judhajeet Ray](https://www.broadinstitute.org/bios/judhajeet-ray). Their
 guidance has pushed me to always be the best scientist I can and should be.
 
 None of this work would have been possible without such generous mentorship
